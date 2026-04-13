@@ -17,10 +17,27 @@
   <body
     class="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"
   >
+    <div id="error-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm transition-all duration-300">
+        <div class="bg-slate-800 p-8 rounded-3xl border border-rose-500/30 max-w-sm w-full text-center shadow-2xl">
+            <div class="w-16 h-16 bg-rose-500/20 rounded-full mx-auto flex items-center justify-center mb-5">
+                <svg class="w-8 h-8 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </div>
+            <h2 id="error-title" class="text-2xl font-bold text-white mb-2">Booking Failed</h2>
+            <p id="error-message" class="text-slate-400 mb-8">Sorry! Someone else just snatched this seat before you.</p>
+            <button onclick="closeErrorModal()" class="w-full bg-rose-500 hover:bg-rose-600 text-white font-semibold py-3 rounded-xl transition-all shadow-[0_0_15px_rgba(244,63,94,0.3)]">Got it, refresh</button>
+        </div>
+    </div>
+
     <div
       class="max-w-7xl w-full bg-slate-800/80 backdrop-blur-xl rounded-3xl shadow-2xl p-10 border border-slate-700/50"
     >
+      <div class="flex justify-end mb-4">
+        <button id="logout-btn" class="bg-rose-500/20 hover:bg-rose-500/40 text-rose-400 border border-rose-500/30 px-4 py-2 rounded-lg transition-all font-medium text-sm">Logout</button>
+      </div>
       <div class="text-center mb-10">
+        <div id="user-info" class="mb-4 hidden">
+          <p class="text-slate-300 font-medium">Welcome, <span id="username-display" class="text-emerald-400 font-bold">${}</span>!</p>
+        </div>
         <h1
           class="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400 mb-4 tracking-tight"
         >
@@ -68,10 +85,66 @@
     </div>
 
     <script>
+      function closeErrorModal() {
+          document.getElementById('error-modal').classList.add('hidden');
+          window.location.reload(); 
+      }
+
+      function showErrorModal(title, message) {
+          document.getElementById('error-title').textContent = title;
+          document.getElementById('error-message').textContent = message;
+          document.getElementById('error-modal').classList.remove('hidden');
+      }
+
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        window.location.href = "/login";
+      }
+
+      document.getElementById('logout-btn').addEventListener('click', async () => {
+         await fetch('/api/auth/logout', { method: 'POST' });
+         localStorage.removeItem('accessToken');
+         localStorage.removeItem('username');
+         window.location.href = "/login";
+      });
+
+      async function fetchWithAuth(url, options = {}) {
+        let currentToken = localStorage.getItem('accessToken');
+        const headers = {
+            ...options.headers,
+            'Authorization': `Bearer ${currentToken}`
+        };
+
+        let response = await fetch(url, { ...options, headers });
+        
+        if (response.status === 401) {
+            const refreshRes = await fetch('/api/auth/refresh-token', { method: 'POST' });
+            if (refreshRes.ok) {
+                const data = await refreshRes.json();
+                localStorage.setItem('accessToken', data.data.accessToken);
+                headers['Authorization'] = `Bearer ${data.data.accessToken}`;
+                response = await fetch(url, { ...options, headers });
+            } else {
+                localStorage.removeItem('accessToken');
+                showErrorModal("Session Expired", "Please log in again. Redirecting...");
+                setTimeout(() => window.location.href = "/login", 2000);
+            }
+        }
+        return response;
+      }
+
       async function run() {
+        const storedName = localStorage.getItem('username');
+        if (storedName) {
+            document.getElementById('username-display').textContent = storedName;
+            document.getElementById('user-info').classList.remove('hidden');
+        }
+
         const tbl = document.getElementById("tbl");
-        const res = await fetch("/seats");
-        const resarray = await res.json();
+        const res = await fetchWithAuth("/seats");
+        if (!res || !res.ok) return; 
+        const jsonResponse = await res.json();
+        const resarray = jsonResponse.data || jsonResponse;
         const j = resarray.sort((a, b) => a.id - b.id);
         let tr;
         for (let i = 0; i < j.length; i++) {
@@ -79,7 +152,6 @@
 
           const td = document.createElement("td");
 
-          // Base aesthetic classes - added 'relative group' for tooltip positioning
           const baseClasses =
             "w-32 h-32 rounded-2xl text-center align-middle text-2xl font-bold transition-all duration-300 select-none relative group";
 
@@ -106,29 +178,26 @@
 
             try {
               const id = j[i].id; // Safe from loop closure
-              const name = prompt("Enter your name");
-              if (!name) return;
-
-              const res = await fetch(`/${id}/${name}`, { method: "PUT" });
+              
+              const res = await fetchWithAuth(`/${id}`, { method: "PUT" });
               const data = await res.json();
 
               if (data.error) {
-                alert("FAILED! Couldn't book! already booked.");
+                document.getElementById('error-modal').classList.remove('hidden');
               } else {
-                alert("Booked successfully!");
-                // Visually transition to booked state upon success
+                const returnedName = data.username;
                 currentTd.className = `${baseClasses} bg-rose-500/10 text-rose-500/60 border border-rose-500/20 cursor-not-allowed`;
                 currentTd.innerHTML = `
                             <span class="relative z-10">${id}</span>
                             <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 px-4 py-2 bg-slate-900 border border-slate-700 text-sm text-slate-300 rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap shadow-2xl z-50 pointer-events-none font-normal shadow-[0_10px_25px_rgba(0,0,0,0.5)]">
-                                Booked by: <span class="font-bold text-white ml-1">${name}</span>
+                                Booked by: <span class="font-bold text-white ml-1">${returnedName}</span>
                                 <div class="absolute top-full left-1/2 -translate-x-1/2 -mt-[1px] border-[6px] border-transparent border-t-slate-700"></div>
                                 <div class="absolute top-full left-1/2 -translate-x-1/2 -mt-[2px] border-[5px] border-transparent border-t-slate-900"></div>
                             </div>
                         `;
               }
             } catch (ex) {
-              alert("error booking " + ex);
+              showErrorModal("Error", "Error booking seat: " + ex);
             }
           });
           tr.appendChild(td);
