@@ -48,8 +48,11 @@ app.use(cors());
 app.use(express.json()); 
 app.use(cookieParser());
 
-// Apply our authentication routes
 app.use("/api/auth", authRoutes);
+
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "OK", uptime: process.uptime(), timestamp: new Date() });
+});
 
 app.get("/", (req, res) => {
   res.sendFile(__dirname + "/index.html");
