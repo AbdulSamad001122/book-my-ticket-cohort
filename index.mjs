@@ -79,10 +79,11 @@ app.get("/seats", authenticate, async (req, res) => {
 
 //book a seat give the seatId and your name
 
-app.put("/:id", authenticate, async (req, res) => {
+app.put("/:id/:name", authenticate, async (req, res) => {
   try {
     const id = req.params.id;
-    const name = req.user.username; // Grab perfectly valid username from the JWT middleware payload
+    const name = req.params.name;// Grab perfectly valid username from the JWT middleware payload
+    
     // payment integration should be here
     // verify payment
     const conn = await pool.connect(); // pick a connection from the pool

@@ -179,7 +179,8 @@
             try {
               const id = j[i].id; // Safe from loop closure
               
-              const res = await fetchWithAuth(`/${id}`, { method: "PUT" });
+              const username = localStorage.getItem('username');
+              const res = await fetchWithAuth(`/${id}/${username}`, { method: "PUT" });
               const data = await res.json();
 
               if (data.error) {
