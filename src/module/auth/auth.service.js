@@ -40,7 +40,7 @@ const login = async ({ username, password }) => {
     const isPasswordValid = await comparePass(password, user.rows[0].password);
 
     if (!isPasswordValid) {
-        throw ApiError.unauthorized("Invalid password");
+        throw ApiError.unauthorized("Invalid credentials");
     }
 
     const payload = {
