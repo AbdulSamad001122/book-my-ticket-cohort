@@ -61,3 +61,5 @@ node_modules/
 # OS System Files
 .DS_Store
 Thumbs.db
+
+reset-local-db.mjs

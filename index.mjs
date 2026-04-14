@@ -89,6 +89,19 @@ app.put("/:id", authenticate, async (req, res) => {
     //begin transaction
     // KEEP THE TRANSACTION AS SMALL AS POSSIBLE
     await conn.query("BEGIN");
+
+    // Validate max seats (Max 2 seats per user)
+    const countSql = "SELECT COUNT(*) FROM seats WHERE name = $1";
+    const countResult = await conn.query(countSql, [name]);
+    const seatCount = parseInt(countResult.rows[0].count, 10);
+    
+    if (seatCount >= 2) {
+      await conn.query("ROLLBACK");
+      conn.release();
+      res.send({ error: "You cannot book more than 2 seats." });
+      return;
+    }
+
     //getting the row to make sure it is not booked
     /// $1 is a variable which we are passing in the array as the second parameter of query function,
     // Why do we use $1? -> this is to avoid SQL INJECTION
