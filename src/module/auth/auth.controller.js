@@ -12,7 +12,7 @@ const login = async (req, res) => {
     res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
         secure: true,
-        maxAge: 7 * 24 * 60 * 60 * 1000,
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours matching .env
     });
 
     ApiResponse.ok(res, "Login successful", { user, accessToken });
@@ -21,7 +21,14 @@ const login = async (req, res) => {
 const refreshToken = async (req, res) => {
     const token = req.cookies?.refreshToken;
 
-    const newAccessToken = await authService.refreshAccessToken(token);
+    const { newAccessToken, newRefreshToken } = await authService.refreshAccessToken(token);
+
+    // Set new refresh token in cookie
+    res.cookie("refreshToken", newRefreshToken, {
+        httpOnly: true,
+        secure: true,
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours matching .env
+    });
 
     ApiResponse.ok(res, "Token refreshed successfully", { accessToken: newAccessToken });
 };

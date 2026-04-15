@@ -1,6 +1,6 @@
 import ApiError from "../../common/utils/Api-error.js";
 import { hashPass, comparePass } from "../../common/utils/password.utils.js";
-import { generateAccessToken, generateRefreshToken } from "../../common/utils/jwt-utils.js";
+import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from "../../common/utils/jwt-utils.js";
 import { pool } from "../../../index.mjs";
 import dotenv from "dotenv";
 
@@ -34,7 +34,7 @@ const login = async ({ username, password }) => {
     const user = await pool.query("SELECT * FROM users WHERE username = $1", [username])
 
     if (user.rowCount === 0) {
-        throw ApiError.conflict("User not found");
+        throw ApiError.unauthorized("User not found");
     }
 
     const isPasswordValid = await comparePass(password, user.rows[0].password);
@@ -62,9 +62,33 @@ const refreshAccessToken = async (oldRefreshToken) => {
     if (!oldRefreshToken) {
         throw ApiError.unauthorized("No refresh token provided");
     }
-    const decoded = verifyRefreshToken(oldRefreshToken);
-    const newAccessToken = generateAccessToken(decoded);
-    return newAccessToken;
+    
+    try {
+        const decoded = verifyRefreshToken(oldRefreshToken);
+        const userId = decoded.payload;
+        
+        // Verify user still exists
+        const user = await pool.query("SELECT * FROM users WHERE id = $1", [userId]);
+        if (user.rowCount === 0) {
+            throw ApiError.unauthorized("User not found");
+        }
+        
+        // Generate new access token
+        const newAccessToken = generateAccessToken(userId);
+        
+        // Generate new refresh token (rotation)
+        const newRefreshToken = generateRefreshToken(userId);
+        
+        return {
+            newAccessToken,
+            newRefreshToken
+        };
+    } catch (error) {
+        if (error.name === 'TokenExpiredError') {
+            throw ApiError.unauthorized("Refresh token expired");
+        }
+        throw ApiError.unauthorized("Invalid refresh token");
+    }
 };
 
 export default {
